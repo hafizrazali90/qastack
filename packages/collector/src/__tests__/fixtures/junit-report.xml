@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="3" failures="1" errors="0" time="8.5">
+  <testsuite name="users" tests="2" failures="1" time="5.0">
+    <testcase name="can view user list" classname="tests.e2e.users.UserListTest" time="2.0"/>
+    <testcase name="can search users" classname="tests.e2e.users.UserSearchTest" time="3.0">
+      <failure message="Expected 5 but got 0">AssertionError: Expected 5 but got 0</failure>
+    </testcase>
+  </testsuite>
+  <testsuite name="orders" tests="1" failures="0" time="3.5">
+    <testcase name="can view order list" classname="tests.e2e.orders.OrderListTest" time="3.5"/>
+  </testsuite>
+</testsuites>

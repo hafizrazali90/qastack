@@ -1,12 +1,24 @@
 {
   "name": "qastack",
   "version": "0.1.0",
+  "description": "Full QA stack in a box — from user stories to green light",
   "type": "module",
   "bin": {
     "qastack": "./dist/index.js"
   },
   "main": "./dist/index.js",
   "files": ["dist"],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hafizrazali/qastack"
+  },
+  "keywords": ["qa", "testing", "playwright", "dashboard", "ai", "test-generation"],
+  "author": "Hafiz Razali",
+  "license": "MIT",
+  "homepage": "https://github.com/hafizrazali/qastack#readme",
   "scripts": {
     "build": "tsup",
     "test": "vitest run",

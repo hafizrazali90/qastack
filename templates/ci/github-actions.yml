@@ -1,0 +1,35 @@
+# qastack — GitHub Actions Template
+# Copy this to .github/workflows/qa.yml in your project
+
+name: QA Tests
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  qa:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps
+
+      - name: Run tests
+        run: npx playwright test --reporter=json --output-file=playwright-report/results.json
+
+      - name: Collect results
+        if: always()
+        run: npx qastack collect --format playwright --json playwright-report/results.json
+
+      - name: Print status
+        if: always()
+        run: npx qastack status

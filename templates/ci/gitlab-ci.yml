@@ -1,0 +1,16 @@
+# qastack — GitLab CI Template
+# Copy this to .gitlab-ci.yml in your project
+
+qa:
+  image: mcr.microsoft.com/playwright:v1.52.0-noble
+  stage: test
+  script:
+    - npm ci
+    - npx playwright test --reporter=json --output-file=playwright-report/results.json
+    - npx qastack collect --format playwright --json playwright-report/results.json
+    - npx qastack status
+  artifacts:
+    when: always
+    paths:
+      - playwright-report/
+    expire_in: 7 days

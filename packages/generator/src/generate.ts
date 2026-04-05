@@ -1,0 +1,329 @@
+import type { UserStory, Route } from '@qastack/core';
+import { generatePlaywrightTest } from './templates/playwright.js';
+import { generateJestTest } from './templates/jest.js';
+import { generatePestTest } from './templates/pest.js';
+import { generatePytestTest } from './templates/pytest.js';
+import { generateRspecTest } from './templates/rspec.js';
+import { capitalize, escapeRegex, slugify } from './helpers.js';
+
+export interface GenerateOptions {
+  stories: UserStory[];
+  testRunner: string;
+  testDir: string;
+  routes?: Route[];
+}
+
+export interface GeneratedTest {
+  story: UserStory;
+  code: string;
+  filePath: string;
+}
+
+/**
+ * Generate test skeletons from user stories.
+ *
+ * Routes are optionally provided to match stories to URLs. Stories for the
+ * same module are merged into a single file per module.
+ */
+export function generateTests(options: GenerateOptions): GeneratedTest[] {
+  const { stories, testRunner, testDir, routes } = options;
+  const results: GeneratedTest[] = [];
+
+  for (const story of stories) {
+    // Try to match story to a route for the URL
+    const matchedRoute = routes?.find(
+      (r) => r.path.includes(`/${story.module}`) && r.method === 'GET',
+    );
+    const routePath = matchedRoute?.path;
+
+    // Generate test code based on runner
+    const code = generateTestCode(story, testRunner, routePath);
+
+    // Determine file path: testDir/module/module-action.spec.ext
+    const ext = getExtension(testRunner);
+    const fileName = `${story.module}-${slugify(story.action)}.spec.${ext}`;
+    const filePath = `${testDir}/${story.module}/${fileName}`;
+
+    results.push({ story, code, filePath });
+  }
+
+  // Group by module -- if multiple stories for same module, merge into one file
+  return mergeByModule(results, testRunner);
+}
+
+function generateTestCode(
+  story: UserStory,
+  runner: string,
+  routePath?: string,
+): string {
+  switch (runner) {
+    case 'playwright':
+      return generatePlaywrightTest(story, routePath);
+    case 'jest':
+      return generateJestTest(story, routePath);
+    case 'pest':
+      return generatePestTest(story, routePath);
+    case 'pytest':
+      return generatePytestTest(story, routePath);
+    case 'rspec':
+      return generateRspecTest(story, routePath);
+    default:
+      return generatePlaywrightTest(story, routePath);
+  }
+}
+
+export function getExtension(runner: string): string {
+  switch (runner) {
+    case 'playwright':
+    case 'jest':
+      return 'ts';
+    case 'pest':
+      return 'php';
+    case 'pytest':
+      return 'py';
+    case 'rspec':
+      return 'rb';
+    default:
+      return 'ts';
+  }
+}
+
+/**
+ * Merge tests for the same module into one file.
+ *
+ * When multiple stories target the same module we combine their generated code
+ * into a single output file. For structured test runners (playwright, jest,
+ * pest) we strip duplicate imports/headers and wrap individual test bodies
+ * inside a shared describe block. For pytest and rspec we concatenate class
+ * methods / examples.
+ */
+function mergeByModule(
+  tests: GeneratedTest[],
+  runner: string,
+): GeneratedTest[] {
+  const groups = new Map<string, GeneratedTest[]>();
+
+  for (const test of tests) {
+    const key = test.story.module;
+    const existing = groups.get(key);
+    if (existing) {
+      existing.push(test);
+    } else {
+      groups.set(key, [test]);
+    }
+  }
+
+  const merged: GeneratedTest[] = [];
+
+  for (const [module, group] of groups) {
+    // Single story for this module -- no merge needed
+    if (group.length === 1) {
+      merged.push(group[0]!);
+      continue;
+    }
+
+    const ext = getExtension(runner);
+    const filePath = `${extractTestDir(group[0]!.filePath, module)}/${module}/${module}.spec.${ext}`;
+    const code = mergeCode(group, runner);
+
+    // Use the first story as representative
+    merged.push({
+      story: group[0]!.story,
+      code,
+      filePath,
+    });
+  }
+
+  return merged;
+}
+
+/**
+ * Extract the testDir portion from a full file path.
+ * Given "tests/e2e/users/users-view.spec.ts" and module "users",
+ * returns "tests/e2e".
+ */
+function extractTestDir(filePath: string, module: string): string {
+  const moduleIdx = filePath.lastIndexOf(`/${module}/`);
+  if (moduleIdx === -1) return filePath;
+  return filePath.slice(0, moduleIdx);
+}
+
+/**
+ * Merge code from multiple generated tests into one file.
+ */
+function mergeCode(group: GeneratedTest[], runner: string): string {
+  switch (runner) {
+    case 'playwright':
+      return mergePlaywright(group);
+    case 'jest':
+      return mergeJest(group);
+    case 'pest':
+      return mergePest(group);
+    case 'pytest':
+      return mergePytest(group);
+    case 'rspec':
+      return mergeRspec(group);
+    default:
+      return mergePlaywright(group);
+  }
+}
+
+function mergePlaywright(group: GeneratedTest[]): string {
+  const module = group[0]!.story.module;
+
+  const header = `// Generated by qastack — merged module: ${module}
+// Status: NEEDS_REVIEW
+
+import { test, expect } from '@playwright/test';
+`;
+
+  const testBodies = group.map((g) => {
+    const s = g.story;
+    const routePath = extractRouteFromCode(g.code) ?? '/';
+    return `
+  test('${s.id}: ${s.persona} can ${s.action} @${s.module} @${s.tier} @e2e', async ({ page }) => {
+    // 1. Navigate
+    await page.goto('${routePath}', { waitUntil: 'domcontentloaded' });
+
+    // 2. Verify page loaded
+    await expect(page.getByRole('heading', { name: /${escapeRegex(capitalize(s.module))}/i })).toBeVisible();
+
+    // 3. Verify expected result
+    // TODO: [HUMAN] ${s.expectedResult}
+
+    // 4. Verify key interactions
+    // TODO: [HUMAN] Add assertions for: ${s.action}
+  });`;
+  });
+
+  return `${header}
+test.describe('${capitalize(module)} @${module}', () => {${testBodies.join('\n')}
+});
+`;
+}
+
+function mergeJest(group: GeneratedTest[]): string {
+  const module = group[0]!.story.module;
+
+  const header = `// Generated by qastack — merged module: ${module}
+// Status: NEEDS_REVIEW
+`;
+
+  const testBodies = group.map((g) => {
+    const s = g.story;
+    return `
+  it('${s.id}: ${s.persona} can ${s.action}', async () => {
+    // TODO: [HUMAN] Setup test data
+
+    // TODO: [HUMAN] Execute action: ${s.action}
+
+    // TODO: [HUMAN] Assert: ${s.expectedResult}
+  });`;
+  });
+
+  return `${header}
+describe('${capitalize(module)}', () => {${testBodies.join('\n')}
+});
+`;
+}
+
+function mergePest(group: GeneratedTest[]): string {
+  const module = group[0]!.story.module;
+
+  const testBodies = group.map((g) => {
+    const s = g.story;
+    const routePath = extractRouteFromCode(g.code) ?? '/';
+    return `
+    it('${s.id}: ${s.persona} can ${s.action}', function () {
+        // TODO: [HUMAN] Setup test data
+
+        \\$response = \\$this->get('${routePath}');
+
+        \\$response->assertStatus(200);
+        // TODO: [HUMAN] Assert: ${s.expectedResult}
+    })->group('${s.tier}');`;
+  });
+
+  return `<?php
+// Generated by qastack — merged module: ${module}
+// Status: NEEDS_REVIEW
+
+describe('${capitalize(module)}', function () {${testBodies.join('\n')}
+});
+`;
+}
+
+function mergePytest(group: GeneratedTest[]): string {
+  const module = group[0]!.story.module;
+
+  const header = `# Generated by qastack — merged module: ${module}
+# Status: NEEDS_REVIEW
+
+import pytest
+
+class Test${capitalize(module)}:
+    """${capitalize(module)} tests"""
+`;
+
+  const methods = group.map((g) => {
+    const s = g.story;
+    const methodSuffix = s.action
+      .replace(/\s+/g, '_')
+      .toLowerCase()
+      .slice(0, 50);
+    const methodId = s.id.toLowerCase().replace(/-/g, '_');
+    return `
+    @pytest.mark.${s.tier}
+    def test_${methodId}_${methodSuffix}(self, client):
+        """${s.id}: ${s.persona} can ${s.action}"""
+        # TODO: [HUMAN] Setup test data
+
+        # TODO: [HUMAN] Execute action: ${s.action}
+
+        # TODO: [HUMAN] Assert: ${s.expectedResult}
+        pass`;
+  });
+
+  return `${header}${methods.join('\n')}
+`;
+}
+
+function mergeRspec(group: GeneratedTest[]): string {
+  const module = group[0]!.story.module;
+
+  const header = `# Generated by qastack — merged module: ${module}
+# Status: NEEDS_REVIEW
+`;
+
+  const examples = group.map((g) => {
+    const s = g.story;
+    return `
+  it '${s.id}: ${s.persona} can ${s.action}' do
+    # TODO: [HUMAN] Setup test data
+
+    # TODO: [HUMAN] Execute action: ${s.action}
+
+    # TODO: [HUMAN] Assert: ${s.expectedResult}
+  end`;
+  });
+
+  return `${header}
+RSpec.describe '${capitalize(module)}', type: :feature do${examples.join('\n')}
+end
+`;
+}
+
+/**
+ * Extract the route path from generated code by looking for page.goto or $this->get patterns.
+ */
+function extractRouteFromCode(code: string): string | undefined {
+  // Playwright: page.goto('/some/path'
+  const pwMatch = code.match(/page\.goto\('([^']+)'/);
+  if (pwMatch?.[1]) return pwMatch[1];
+
+  // Pest: $this->get('/some/path')
+  const pestMatch = code.match(/\$this->get\('([^']+)'/);
+  if (pestMatch?.[1]) return pestMatch[1];
+
+  return undefined;
+}

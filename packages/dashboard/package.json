@@ -1,0 +1,8 @@
+{
+  "name": "@qastack/dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./index.html",
+  "files": ["index.html"],
+  "scripts": {}
+}

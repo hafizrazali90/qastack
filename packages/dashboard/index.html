@@ -1,0 +1,2428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>qastack — QA Monitor</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    /* ============================================================
+       CSS Variables — Vercel-inspired light/dark theme
+       ============================================================ */
+    :root {
+      --bg: #FFFFFF;
+      --bg-card: #FFFFFF;
+      --bg-hover: #FAFAFA;
+      --bg-input: #FFFFFF;
+      --border: #EAEAEA;
+      --border-hover: #C9C9C9;
+      --text-primary: #000000;
+      --text-secondary: #666666;
+      --text-tertiary: #999999;
+      --accent: #0070F3;
+      --accent-light: rgba(0, 112, 243, 0.1);
+      --pass: #0070F3;
+      --fail: #E5484D;
+      --warn: #F5A623;
+      --skip: #888888;
+      --success: #17B169;
+      --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 0 0 1px rgba(0,0,0,0.04);
+      --shadow-lg: 0 4px 12px rgba(0,0,0,0.1), 0 0 0 1px rgba(0,0,0,0.04);
+      --radius: 8px;
+      --radius-sm: 4px;
+      --transition: 150ms ease;
+      --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    [data-theme="dark"] {
+      --bg: #000000;
+      --bg-card: #111111;
+      --bg-hover: #1A1A1A;
+      --bg-input: #111111;
+      --border: #333333;
+      --border-hover: #555555;
+      --text-primary: #EDEDED;
+      --text-secondary: #A1A1A1;
+      --text-tertiary: #666666;
+      --accent: #0070F3;
+      --accent-light: rgba(0, 112, 243, 0.15);
+      --shadow: 0 1px 3px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.06);
+      --shadow-lg: 0 4px 12px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.06);
+    }
+
+    /* ============================================================
+       Reset & Base
+       ============================================================ */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      font-size: 14px;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text-primary);
+      line-height: 1.5;
+      min-height: 100vh;
+      transition: background var(--transition), color var(--transition);
+    }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* ============================================================
+       Header
+       ============================================================ */
+    .header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+
+    .header-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      height: 56px;
+      gap: 24px;
+    }
+
+    .logo {
+      font-weight: 700;
+      font-size: 16px;
+      letter-spacing: -0.02em;
+      color: var(--text-primary);
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .logo-icon {
+      width: 20px;
+      height: 20px;
+      background: var(--accent);
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .logo-icon svg {
+      width: 12px;
+      height: 12px;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 2px;
+      overflow-x: auto;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+      flex: 1;
+    }
+
+    .tabs::-webkit-scrollbar { display: none; }
+
+    .tab-btn {
+      padding: 8px 12px;
+      border: none;
+      background: none;
+      color: var(--text-secondary);
+      font-family: var(--font);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      border-radius: var(--radius-sm);
+      white-space: nowrap;
+      transition: all var(--transition);
+    }
+
+    .tab-btn:hover {
+      color: var(--text-primary);
+      background: var(--bg-hover);
+    }
+
+    .tab-btn.active {
+      color: var(--text-primary);
+      background: var(--accent-light);
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .refresh-indicator {
+      font-size: 11px;
+      color: var(--text-tertiary);
+      white-space: nowrap;
+    }
+
+    .theme-toggle {
+      width: 32px;
+      height: 32px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--bg-card);
+      color: var(--text-secondary);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all var(--transition);
+    }
+
+    .theme-toggle:hover {
+      border-color: var(--border-hover);
+      color: var(--text-primary);
+    }
+
+    /* ============================================================
+       Main content
+       ============================================================ */
+    .main {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    /* ============================================================
+       Alert banner
+       ============================================================ */
+    .alert-banner {
+      padding: 12px 16px;
+      border-radius: var(--radius);
+      margin-bottom: 20px;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .alert-banner.critical {
+      background: rgba(229, 72, 77, 0.08);
+      border: 1px solid rgba(229, 72, 77, 0.2);
+      color: var(--fail);
+    }
+
+    .alert-banner.warning {
+      background: rgba(245, 166, 35, 0.08);
+      border: 1px solid rgba(245, 166, 35, 0.2);
+      color: var(--warn);
+    }
+
+    .alert-banner.info {
+      background: rgba(0, 112, 243, 0.08);
+      border: 1px solid rgba(0, 112, 243, 0.2);
+      color: var(--accent);
+    }
+
+    .alert-icon {
+      flex-shrink: 0;
+      width: 16px;
+      height: 16px;
+      margin-top: 1px;
+    }
+
+    .alert-content { flex: 1; }
+
+    .alert-title {
+      font-weight: 600;
+      margin-bottom: 2px;
+    }
+
+    .alert-guidance {
+      opacity: 0.8;
+    }
+
+    /* ============================================================
+       Cards & Grid
+       ============================================================ */
+    .grid {
+      display: grid;
+      gap: 16px;
+    }
+
+    .grid-2 { grid-template-columns: repeat(2, 1fr); }
+    .grid-3 { grid-template-columns: repeat(3, 1fr); }
+    .grid-4 { grid-template-columns: repeat(4, 1fr); }
+
+    @media (max-width: 768px) {
+      .grid-2, .grid-3, .grid-4 {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (min-width: 769px) and (max-width: 1024px) {
+      .grid-3 { grid-template-columns: repeat(2, 1fr); }
+      .grid-4 { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      transition: box-shadow var(--transition), border-color var(--transition);
+    }
+
+    .card:hover {
+      box-shadow: var(--shadow);
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    .card-title {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .card-value {
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1.1;
+    }
+
+    .card-subtitle {
+      font-size: 12px;
+      color: var(--text-tertiary);
+      margin-top: 4px;
+    }
+
+    .stat-card {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    /* ============================================================
+       Health Gauge (SVG circle)
+       ============================================================ */
+    .gauge-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .gauge-wrapper {
+      position: relative;
+      width: 160px;
+      height: 160px;
+    }
+
+    .gauge-svg {
+      width: 100%;
+      height: 100%;
+      transform: rotate(-90deg);
+    }
+
+    .gauge-bg {
+      fill: none;
+      stroke: var(--border);
+      stroke-width: 8;
+    }
+
+    .gauge-fill {
+      fill: none;
+      stroke-width: 8;
+      stroke-linecap: round;
+      transition: stroke-dashoffset 0.8s ease, stroke 0.3s ease;
+    }
+
+    .gauge-center {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+    }
+
+    .gauge-value {
+      font-size: 36px;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      line-height: 1;
+    }
+
+    .gauge-label {
+      font-size: 12px;
+      color: var(--text-tertiary);
+      margin-top: 4px;
+    }
+
+    /* ============================================================
+       Badges
+       ============================================================ */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: 100px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      white-space: nowrap;
+    }
+
+    .badge-pass { background: rgba(0, 112, 243, 0.1); color: var(--pass); }
+    .badge-fail { background: rgba(229, 72, 77, 0.1); color: var(--fail); }
+    .badge-warn { background: rgba(245, 166, 35, 0.1); color: var(--warn); }
+    .badge-skip { background: rgba(136, 136, 136, 0.1); color: var(--skip); }
+    .badge-flaky { background: rgba(245, 166, 35, 0.1); color: var(--warn); }
+
+    .badge-ready { background: rgba(23, 177, 105, 0.1); color: var(--success); }
+    .badge-conditional { background: rgba(245, 166, 35, 0.1); color: var(--warn); }
+    .badge-not-ready { background: rgba(229, 72, 77, 0.1); color: var(--fail); }
+
+    .badge-trend-improving { background: rgba(23, 177, 105, 0.1); color: var(--success); }
+    .badge-trend-degrading { background: rgba(229, 72, 77, 0.1); color: var(--fail); }
+    .badge-trend-stable { background: rgba(136, 136, 136, 0.1); color: var(--skip); }
+
+    .release-badge {
+      padding: 4px 14px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    /* ============================================================
+       Tables
+       ============================================================ */
+    .table-wrapper {
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    th {
+      text-align: left;
+      padding: 10px 14px;
+      font-weight: 600;
+      font-size: 12px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      background: var(--bg-hover);
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+      cursor: default;
+      user-select: none;
+    }
+
+    th.sortable {
+      cursor: pointer;
+    }
+
+    th.sortable:hover {
+      color: var(--text-primary);
+    }
+
+    th .sort-arrow {
+      margin-left: 4px;
+      opacity: 0.4;
+    }
+
+    th.sort-active .sort-arrow {
+      opacity: 1;
+      color: var(--accent);
+    }
+
+    td {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-primary);
+      vertical-align: middle;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    tr:hover td {
+      background: var(--bg-hover);
+    }
+
+    .td-mono {
+      font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+      font-size: 12px;
+    }
+
+    .td-truncate {
+      max-width: 300px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* ============================================================
+       Health bar (inline)
+       ============================================================ */
+    .health-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 120px;
+    }
+
+    .health-bar-track {
+      flex: 1;
+      height: 6px;
+      background: var(--border);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .health-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.5s ease, background-color 0.3s ease;
+    }
+
+    .health-bar-value {
+      font-size: 12px;
+      font-weight: 600;
+      min-width: 40px;
+      text-align: right;
+    }
+
+    /* ============================================================
+       Filters & Controls
+       ============================================================ */
+    .filters {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .filter-input, .filter-select {
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--bg-input);
+      color: var(--text-primary);
+      font-family: var(--font);
+      font-size: 13px;
+      transition: border-color var(--transition);
+    }
+
+    .filter-input:focus, .filter-select:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-light);
+    }
+
+    .filter-input {
+      width: 240px;
+    }
+
+    .filter-select {
+      min-width: 120px;
+    }
+
+    .pagination {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 12px;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .pagination-btns {
+      display: flex;
+      gap: 4px;
+    }
+
+    .page-btn {
+      padding: 4px 10px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--bg-card);
+      color: var(--text-primary);
+      font-family: var(--font);
+      font-size: 12px;
+      cursor: pointer;
+      transition: all var(--transition);
+    }
+
+    .page-btn:hover:not(:disabled) {
+      border-color: var(--border-hover);
+      background: var(--bg-hover);
+    }
+
+    .page-btn:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
+
+    .page-btn.active {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+
+    /* ============================================================
+       Chart container
+       ============================================================ */
+    .chart-container {
+      position: relative;
+      width: 100%;
+      height: 280px;
+    }
+
+    .chart-container canvas {
+      width: 100% !important;
+      height: 100% !important;
+    }
+
+    .chart-container-sm {
+      height: 220px;
+    }
+
+    /* ============================================================
+       Empty state
+       ============================================================ */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 60px 20px;
+      text-align: center;
+      color: var(--text-tertiary);
+    }
+
+    .empty-state svg {
+      width: 48px;
+      height: 48px;
+      margin-bottom: 16px;
+      opacity: 0.3;
+    }
+
+    .empty-state-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 4px;
+    }
+
+    .empty-state-text {
+      font-size: 13px;
+      max-width: 360px;
+    }
+
+    /* ============================================================
+       Loading
+       ============================================================ */
+    .loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 60px 20px;
+    }
+
+    .spinner {
+      width: 24px;
+      height: 24px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* ============================================================
+       Overview layout
+       ============================================================ */
+    .overview-top {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    @media (max-width: 768px) {
+      .overview-top {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .overview-gauge-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .overview-stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+
+    @media (max-width: 640px) {
+      .overview-stats {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    /* ============================================================
+       Section titles
+       ============================================================ */
+    .section-title {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      letter-spacing: -0.01em;
+    }
+
+    .section-subtitle {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 16px;
+    }
+
+    .section-spacer {
+      margin-top: 24px;
+    }
+
+    /* ============================================================
+       Module card (Modules tab)
+       ============================================================ */
+    .module-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .module-row {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 12px 16px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      transition: all var(--transition);
+    }
+
+    .module-row:hover {
+      box-shadow: var(--shadow);
+    }
+
+    .module-rank {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-tertiary);
+      min-width: 24px;
+      text-align: center;
+    }
+
+    .module-name {
+      font-weight: 600;
+      font-size: 14px;
+      min-width: 150px;
+    }
+
+    .module-bar {
+      flex: 1;
+    }
+
+    .module-meta {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    /* ============================================================
+       Regression item
+       ============================================================ */
+    .regression-item {
+      padding: 12px 16px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 8px;
+    }
+
+    .regression-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 4px;
+    }
+
+    .regression-title {
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .regression-meta {
+      font-size: 12px;
+      color: var(--text-secondary);
+      display: flex;
+      gap: 12px;
+    }
+
+    .regression-commits {
+      font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+      font-size: 12px;
+    }
+
+    .commit-pass { color: var(--success); }
+    .commit-fail { color: var(--fail); }
+
+    /* ============================================================
+       MTTR item
+       ============================================================ */
+    .mttr-item {
+      padding: 12px 16px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .mttr-info { flex: 1; }
+
+    .mttr-title {
+      font-weight: 600;
+      font-size: 14px;
+      margin-bottom: 2px;
+    }
+
+    .mttr-meta {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .mttr-duration {
+      font-size: 14px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    /* ============================================================
+       Flaky leaderboard
+       ============================================================ */
+    .flaky-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 8px;
+    }
+
+    .flaky-count {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--warn);
+      min-width: 40px;
+      text-align: center;
+    }
+
+    .flaky-info { flex: 1; }
+
+    .flaky-title {
+      font-weight: 600;
+      font-size: 14px;
+      margin-bottom: 2px;
+    }
+
+    .flaky-meta {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    /* ============================================================
+       Doughnut layout
+       ============================================================ */
+    .doughnut-layout {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 24px;
+      align-items: start;
+    }
+
+    @media (max-width: 768px) {
+      .doughnut-layout {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .doughnut-container {
+      position: relative;
+      width: 280px;
+      height: 280px;
+      margin: 0 auto;
+    }
+
+    .legend-list {
+      list-style: none;
+      padding: 0;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 0;
+      font-size: 13px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .legend-item:last-child {
+      border-bottom: none;
+    }
+
+    .legend-swatch {
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
+
+    .legend-label { flex: 1; }
+
+    .legend-count {
+      font-weight: 600;
+    }
+
+    /* ============================================================
+       Utility
+       ============================================================ */
+    .text-pass { color: var(--pass); }
+    .text-fail { color: var(--fail); }
+    .text-warn { color: var(--warn); }
+    .text-skip { color: var(--skip); }
+    .text-success { color: var(--success); }
+    .text-secondary { color: var(--text-secondary); }
+    .text-tertiary { color: var(--text-tertiary); }
+    .fw-600 { font-weight: 600; }
+    .fw-700 { font-weight: 700; }
+    .mb-8 { margin-bottom: 8px; }
+    .mb-16 { margin-bottom: 16px; }
+    .mb-24 { margin-bottom: 24px; }
+    .mt-16 { margin-top: 16px; }
+    .mt-24 { margin-top: 24px; }
+    .gap-8 { gap: 8px; }
+    .flex { display: flex; }
+    .flex-col { flex-direction: column; }
+    .items-center { align-items: center; }
+    .justify-between { justify-content: space-between; }
+    .flex-1 { flex: 1; }
+    .text-center { text-align: center; }
+    .text-right { text-align: right; }
+
+    /* ============================================================
+       Responsive
+       ============================================================ */
+    @media (max-width: 640px) {
+      .header-inner {
+        padding: 0 16px;
+        gap: 12px;
+      }
+
+      .main {
+        padding: 16px;
+      }
+
+      .tab-btn {
+        padding: 6px 8px;
+        font-size: 12px;
+      }
+
+      .filter-input {
+        width: 100%;
+      }
+
+      .filters {
+        flex-direction: column;
+      }
+
+      .module-row {
+        flex-wrap: wrap;
+      }
+
+      .module-name {
+        min-width: auto;
+        width: 100%;
+      }
+    }
+
+    /* ============================================================
+       Error message tooltip
+       ============================================================ */
+    .error-tooltip {
+      position: relative;
+      cursor: help;
+    }
+
+    .error-tooltip:hover .error-tooltip-content {
+      display: block;
+    }
+
+    .error-tooltip-content {
+      display: none;
+      position: absolute;
+      bottom: 100%;
+      left: 0;
+      z-index: 50;
+      width: 400px;
+      max-height: 200px;
+      overflow-y: auto;
+      padding: 10px 12px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-lg);
+      font-size: 12px;
+      font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+      white-space: pre-wrap;
+      word-break: break-all;
+      color: var(--fail);
+      margin-bottom: 4px;
+    }
+
+    /* ============================================================
+       Footer
+       ============================================================ */
+    .footer {
+      text-align: center;
+      padding: 24px;
+      font-size: 12px;
+      color: var(--text-tertiary);
+      border-top: 1px solid var(--border);
+      margin-top: 40px;
+    }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div class="header-inner">
+      <div class="logo">
+        <div class="logo-icon">
+          <svg viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M2 6l3 3 5-5" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        qastack
+      </div>
+      <nav class="tabs" id="tabs"></nav>
+      <div class="header-actions">
+        <span class="refresh-indicator" id="refresh-indicator"></span>
+        <button class="theme-toggle" id="theme-toggle" title="Toggle theme">
+          <svg id="theme-icon-sun" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.5"/>
+            <path d="M8 1.5v1M8 13.5v1M1.5 8h1M13.5 8h1M3.4 3.4l.7.7M11.9 11.9l.7.7M3.4 12.6l.7-.7M11.9 4.1l.7-.7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          <svg id="theme-icon-moon" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:none">
+            <path d="M13.5 8.5a5.5 5.5 0 01-6-6 5.5 5.5 0 106 6z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="main" id="app">
+    <div class="loading"><div class="spinner"></div></div>
+  </main>
+
+  <footer class="footer">
+    qastack — Open-source QA monitoring
+  </footer>
+
+  <script>
+    /* ==============================================================
+       qastack Dashboard — Single-file vanilla JS app
+       ============================================================== */
+    const API = window.QASTACK_API_URL || '';
+    const REFRESH_INTERVAL = window.QASTACK_REFRESH_INTERVAL || 30000;
+
+    /* ----------------------------------------------------------
+       State
+       ---------------------------------------------------------- */
+    let currentTab = 'overview';
+    let cache = {};
+    let charts = {};
+    let refreshTimer = null;
+    let lastRefresh = null;
+
+    const TAB_CONFIG = [
+      { id: 'overview', label: 'Overview' },
+      { id: 'modules', label: 'Modules' },
+      { id: 'tests', label: 'Tests' },
+      { id: 'regressions', label: 'Regressions' },
+      { id: 'root-causes', label: 'Root Causes' },
+      { id: 'mttr', label: 'MTTR' },
+      { id: 'flaky', label: 'Flaky' },
+    ];
+
+    // Test tab state
+    let testsPage = 1;
+    let testsStatus = '';
+    let testsModule = '';
+    let testsSearch = '';
+
+    // Modules tab sort state
+    let modulesSortBy = 'failures';
+    let modulesSortDir = 'desc';
+
+    /* ----------------------------------------------------------
+       Theme
+       ---------------------------------------------------------- */
+    function getTheme() {
+      return localStorage.getItem('qastack-theme') || 'light';
+    }
+
+    function setTheme(theme) {
+      localStorage.setItem('qastack-theme', theme);
+      document.documentElement.setAttribute('data-theme', theme);
+      const sun = document.getElementById('theme-icon-sun');
+      const moon = document.getElementById('theme-icon-moon');
+      if (sun && moon) {
+        sun.style.display = theme === 'dark' ? 'none' : 'block';
+        moon.style.display = theme === 'dark' ? 'block' : 'none';
+      }
+      // Rebuild any Chart.js charts with new theme colors
+      if (Object.keys(charts).length > 0) {
+        loadTab(currentTab);
+      }
+    }
+
+    function toggleTheme() {
+      setTheme(getTheme() === 'dark' ? 'light' : 'dark');
+    }
+
+    /* ----------------------------------------------------------
+       API helper
+       ---------------------------------------------------------- */
+    async function api(path) {
+      const res = await fetch(`${API}${path}`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `HTTP ${res.status}`);
+      }
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'API error');
+      return json.data;
+    }
+
+    /* ----------------------------------------------------------
+       Utility functions
+       ---------------------------------------------------------- */
+    function esc(str) {
+      if (str == null) return '';
+      const div = document.createElement('div');
+      div.textContent = String(str);
+      return div.innerHTML;
+    }
+
+    function healthColor(pct) {
+      if (pct >= 90) return 'var(--success)';
+      if (pct >= 70) return 'var(--warn)';
+      return 'var(--fail)';
+    }
+
+    function healthClass(pct) {
+      if (pct >= 90) return 'text-success';
+      if (pct >= 70) return 'text-warn';
+      return 'text-fail';
+    }
+
+    function statusBadge(status) {
+      const map = {
+        passed: 'badge-pass',
+        failed: 'badge-fail',
+        skipped: 'badge-skip',
+        flaky: 'badge-flaky',
+      };
+      return `<span class="badge ${map[status] || 'badge-skip'}">${esc(status)}</span>`;
+    }
+
+    function readinessBadge(readiness) {
+      const map = {
+        READY: { cls: 'badge-ready', text: 'READY' },
+        CONDITIONAL: { cls: 'badge-conditional', text: 'CONDITIONAL' },
+        NOT_READY: { cls: 'badge-not-ready', text: 'NOT READY' },
+      };
+      const r = map[readiness] || map.NOT_READY;
+      return `<span class="badge release-badge ${r.cls}">${r.text}</span>`;
+    }
+
+    function trendBadge(trend) {
+      const map = {
+        improving: { cls: 'badge-trend-improving', icon: '\u2191', text: 'Improving' },
+        degrading: { cls: 'badge-trend-degrading', icon: '\u2193', text: 'Degrading' },
+        stable: { cls: 'badge-trend-stable', icon: '\u2192', text: 'Stable' },
+      };
+      const t = map[trend] || map.stable;
+      return `<span class="badge ${t.cls}">${t.icon} ${t.text}</span>`;
+    }
+
+    function formatDate(dateStr) {
+      if (!dateStr) return '—';
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return dateStr;
+      return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) +
+        ' ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function formatDateShort(dateStr) {
+      if (!dateStr) return '—';
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return dateStr;
+      return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+    }
+
+    function shortHash(hash) {
+      if (!hash) return '—';
+      return hash.substring(0, 7);
+    }
+
+    function formatDuration(ms) {
+      if (ms == null) return '—';
+      if (ms < 1000) return `${ms}ms`;
+      if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
+      return `${(ms / 60000).toFixed(1)}m`;
+    }
+
+    function formatHours(h) {
+      if (h == null) return '—';
+      if (h < 1) return `${Math.round(h * 60)}m`;
+      if (h < 24) return `${h.toFixed(1)}h`;
+      return `${(h / 24).toFixed(1)}d`;
+    }
+
+    function chartTextColor() {
+      return getTheme() === 'dark' ? '#A1A1A1' : '#666666';
+    }
+
+    function chartGridColor() {
+      return getTheme() === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+    }
+
+    const ROOT_CAUSE_COLORS = {
+      'infra': '#8B5CF6',
+      'timeout': '#F59E0B',
+      'data-issue': '#EC4899',
+      'ui-bug': '#EF4444',
+      'assertion': '#3B82F6',
+      'flaky': '#F97316',
+      'unknown': '#6B7280',
+      'selector': '#10B981',
+      'auth': '#06B6D4',
+      'navigation': '#8B5CF6',
+    };
+
+    function rootCauseColor(cause) {
+      return ROOT_CAUSE_COLORS[cause] || ROOT_CAUSE_COLORS['unknown'];
+    }
+
+    /* ----------------------------------------------------------
+       Empty state HTML
+       ---------------------------------------------------------- */
+    function emptyState(title, text) {
+      return `
+        <div class="empty-state">
+          <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="6" y="6" width="36" height="36" rx="4" stroke="currentColor" stroke-width="2"/>
+            <path d="M18 24h12M24 18v12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          <div class="empty-state-title">${esc(title || 'No data yet')}</div>
+          <div class="empty-state-text">${esc(text || 'Run your tests and collect results to see data here.')}</div>
+        </div>
+      `;
+    }
+
+    function loadingHtml() {
+      return '<div class="loading"><div class="spinner"></div></div>';
+    }
+
+    /* ----------------------------------------------------------
+       Health bar HTML
+       ---------------------------------------------------------- */
+    function healthBarHtml(pct) {
+      const p = Math.max(0, Math.min(100, pct || 0));
+      return `
+        <div class="health-bar">
+          <div class="health-bar-track">
+            <div class="health-bar-fill" style="width:${p}%;background:${healthColor(p)}"></div>
+          </div>
+          <span class="health-bar-value" style="color:${healthColor(p)}">${p.toFixed(1)}%</span>
+        </div>
+      `;
+    }
+
+    /* ----------------------------------------------------------
+       Health gauge (SVG circle)
+       ---------------------------------------------------------- */
+    function healthGaugeHtml(pct) {
+      const p = Math.max(0, Math.min(100, pct || 0));
+      const r = 68;
+      const c = 2 * Math.PI * r;
+      const offset = c - (p / 100) * c;
+      const color = healthColor(p);
+      return `
+        <div class="gauge-wrapper">
+          <svg class="gauge-svg" viewBox="0 0 160 160">
+            <circle class="gauge-bg" cx="80" cy="80" r="${r}"/>
+            <circle class="gauge-fill" cx="80" cy="80" r="${r}"
+              stroke="${color}"
+              stroke-dasharray="${c}"
+              stroke-dashoffset="${offset}"/>
+          </svg>
+          <div class="gauge-center">
+            <div class="gauge-value" style="color:${color}">${p.toFixed(1)}%</div>
+            <div class="gauge-label">Health</div>
+          </div>
+        </div>
+      `;
+    }
+
+    /* ----------------------------------------------------------
+       Alert banners from thresholds
+       ---------------------------------------------------------- */
+    function renderAlerts(container, latest, thresholds, regressionCount) {
+      if (!latest || !thresholds || !Array.isArray(thresholds)) return;
+
+      const alerts = [];
+      const passRate = latest.health_pct;
+      const totalTests = (latest.passed || 0) + (latest.failed || 0) + (latest.skipped || 0);
+      const flakyRate = totalTests > 0 ? ((latest.flaky || 0) / totalTests) * 100 : 0;
+
+      for (const t of thresholds) {
+        if (!t.is_active) continue;
+
+        let value = null;
+        if (t.metric === 'pass_rate') value = passRate;
+        else if (t.metric === 'flaky_rate') value = flakyRate;
+        else if (t.metric === 'regression_count') value = regressionCount;
+        else continue;
+
+        let triggered = false;
+        if (t.operator === '<' && value < t.threshold) triggered = true;
+        if (t.operator === '<=' && value <= t.threshold) triggered = true;
+        if (t.operator === '>' && value > t.threshold) triggered = true;
+        if (t.operator === '>=' && value >= t.threshold) triggered = true;
+
+        if (triggered) {
+          alerts.push(t);
+        }
+      }
+
+      if (alerts.length === 0) return;
+
+      let html = '';
+      for (const a of alerts) {
+        const icon = a.severity === 'critical'
+          ? '<svg class="alert-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1l7 14H1L8 1zm0 5v4m0 2v1"/></svg>'
+          : '<svg class="alert-icon" viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="8" r="7"/></svg>';
+        html += `
+          <div class="alert-banner ${esc(a.severity)}">
+            ${icon}
+            <div class="alert-content">
+              <div class="alert-title">${esc(a.message)}</div>
+              ${a.guidance ? `<div class="alert-guidance">${esc(a.guidance)}</div>` : ''}
+            </div>
+          </div>
+        `;
+      }
+      container.insertAdjacentHTML('afterbegin', html);
+    }
+
+    /* ----------------------------------------------------------
+       Destroy charts
+       ---------------------------------------------------------- */
+    function destroyCharts() {
+      for (const key of Object.keys(charts)) {
+        if (charts[key] && typeof charts[key].destroy === 'function') {
+          charts[key].destroy();
+        }
+        delete charts[key];
+      }
+    }
+
+    /* ==============================================================
+       TAB RENDERERS
+       ============================================================== */
+
+    /* ----------------------------------------------------------
+       Overview
+       ---------------------------------------------------------- */
+    async function renderOverview(container) {
+      let data, thresholds;
+      try {
+        [data, thresholds] = await Promise.all([
+          api('/api/overview'),
+          api('/api/thresholds'),
+        ]);
+      } catch (err) {
+        container.innerHTML = emptyState('Error loading data', err.message);
+        return;
+      }
+
+      if (!data.latest) {
+        container.innerHTML = emptyState('No runs yet', 'Run your tests and collect results to see data here.');
+        return;
+      }
+
+      const latest = data.latest;
+      const trend = (data.trend || []).slice().reverse();
+
+      let html = '';
+
+      // Top area: gauge + stats
+      html += `<div class="overview-top">`;
+
+      // Gauge card
+      html += `
+        <div class="card overview-gauge-card">
+          ${healthGaugeHtml(latest.health_pct)}
+          <div class="text-center">
+            ${readinessBadge(data.readiness)}
+          </div>
+          <div style="font-size:12px;color:var(--text-tertiary);text-align:center">
+            Run #${latest.id} &middot; ${esc(shortHash(latest.commit_hash))} &middot; ${formatDate(latest.created_at)}
+          </div>
+        </div>
+      `;
+
+      // Stats grid
+      html += `<div>`;
+      html += `<div class="overview-stats mb-16">`;
+      html += statCard('Passed', latest.passed, 'var(--pass)');
+      html += statCard('Failed', latest.failed, 'var(--fail)');
+      html += statCard('Skipped', latest.skipped, 'var(--skip)');
+      html += statCard('Active Regressions', data.active_regressions, data.active_regressions > 0 ? 'var(--fail)' : 'var(--success)');
+      html += statCard('Tracked Failures', data.active_failures_tracking, data.active_failures_tracking > 0 ? 'var(--warn)' : 'var(--success)');
+      html += statCard('Avg MTTR', data.avg_mttr_hours != null ? formatHours(data.avg_mttr_hours) : '—', 'var(--text-primary)');
+      html += `</div>`;
+
+      // Trend chart
+      html += `
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Health Trend (Last 20 Runs)</span>
+          </div>
+          <div class="chart-container" id="trend-chart-container">
+            <canvas id="trend-chart"></canvas>
+          </div>
+        </div>
+      `;
+      html += `</div>`;
+      html += `</div>`;
+
+      // Root cause summary
+      if (data.root_cause_summary && data.root_cause_summary.length > 0) {
+        html += `<div class="section-spacer">`;
+        html += `<div class="section-title">Root Cause Breakdown (Latest Run)</div>`;
+        html += `<div class="grid grid-${Math.min(data.root_cause_summary.length, 4)}">`;
+        for (const rc of data.root_cause_summary) {
+          const color = rootCauseColor(rc.root_cause);
+          html += `
+            <div class="card stat-card">
+              <div class="card-title">${esc(rc.root_cause || 'unknown')}</div>
+              <div class="card-value" style="color:${color}">${rc.count}</div>
+              <div class="card-subtitle">failures</div>
+            </div>
+          `;
+        }
+        html += `</div></div>`;
+      }
+
+      // Module summary table
+      if (data.modules && data.modules.length > 0) {
+        html += `<div class="section-spacer">`;
+        html += `<div class="section-title">Module Summary</div>`;
+        html += `<div class="table-wrapper">`;
+        html += `<table>
+          <thead>
+            <tr>
+              <th>Module</th>
+              <th>Health</th>
+              <th>Passed</th>
+              <th>Failed</th>
+              <th>Skipped</th>
+            </tr>
+          </thead>
+          <tbody>`;
+        for (const m of data.modules) {
+          html += `
+            <tr>
+              <td class="fw-600">${esc(m.module)}</td>
+              <td>${healthBarHtml(m.health_pct)}</td>
+              <td class="text-pass">${m.passed}</td>
+              <td class="${m.failed > 0 ? 'text-fail fw-600' : ''}">${m.failed}</td>
+              <td class="text-skip">${m.skipped}</td>
+            </tr>
+          `;
+        }
+        html += `</tbody></table></div></div>`;
+      }
+
+      container.innerHTML = html;
+
+      // Render alerts at top
+      renderAlerts(container, latest, thresholds, data.active_regressions);
+
+      // Render trend chart
+      if (trend.length > 1) {
+        renderTrendChart('trend-chart', trend);
+      }
+    }
+
+    function statCard(label, value, color) {
+      return `
+        <div class="card stat-card">
+          <div class="card-title">${esc(label)}</div>
+          <div class="card-value" style="color:${color}">${esc(String(value))}</div>
+        </div>
+      `;
+    }
+
+    function renderTrendChart(canvasId, trend) {
+      const canvas = document.getElementById(canvasId);
+      if (!canvas) return;
+
+      const labels = trend.map(r => shortHash(r.commit_hash));
+      const healthData = trend.map(r => r.health_pct);
+      const passedData = trend.map(r => r.passed);
+      const failedData = trend.map(r => r.failed);
+
+      charts.trend = new Chart(canvas, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            {
+              label: 'Health %',
+              data: healthData,
+              borderColor: '#0070F3',
+              backgroundColor: 'rgba(0, 112, 243, 0.1)',
+              fill: true,
+              tension: 0.3,
+              pointRadius: 3,
+              pointHoverRadius: 5,
+              borderWidth: 2,
+              yAxisID: 'y',
+            },
+            {
+              label: 'Failed',
+              data: failedData,
+              borderColor: '#E5484D',
+              backgroundColor: 'rgba(229, 72, 77, 0.1)',
+              fill: false,
+              tension: 0.3,
+              pointRadius: 2,
+              pointHoverRadius: 4,
+              borderWidth: 1.5,
+              borderDash: [4, 4],
+              yAxisID: 'y1',
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: {
+            mode: 'index',
+            intersect: false,
+          },
+          plugins: {
+            legend: {
+              display: true,
+              position: 'top',
+              labels: {
+                color: chartTextColor(),
+                font: { family: "'Inter', sans-serif", size: 11 },
+                usePointStyle: true,
+                pointStyle: 'circle',
+                padding: 16,
+              },
+            },
+            tooltip: {
+              backgroundColor: getTheme() === 'dark' ? '#222' : '#fff',
+              titleColor: getTheme() === 'dark' ? '#eee' : '#111',
+              bodyColor: getTheme() === 'dark' ? '#aaa' : '#555',
+              borderColor: getTheme() === 'dark' ? '#333' : '#eaeaea',
+              borderWidth: 1,
+              padding: 10,
+              cornerRadius: 6,
+              titleFont: { family: "'Inter', sans-serif", weight: '600', size: 12 },
+              bodyFont: { family: "'Inter', sans-serif", size: 11 },
+              callbacks: {
+                title: function(items) {
+                  const idx = items[0].dataIndex;
+                  return `Run — ${labels[idx]}`;
+                },
+              },
+            },
+          },
+          scales: {
+            x: {
+              grid: { color: chartGridColor() },
+              ticks: {
+                color: chartTextColor(),
+                font: { family: "'Inter', sans-serif", size: 10 },
+                maxRotation: 45,
+              },
+            },
+            y: {
+              type: 'linear',
+              position: 'left',
+              min: 0,
+              max: 100,
+              grid: { color: chartGridColor() },
+              ticks: {
+                color: chartTextColor(),
+                font: { family: "'Inter', sans-serif", size: 10 },
+                callback: v => v + '%',
+              },
+              title: {
+                display: true,
+                text: 'Health %',
+                color: chartTextColor(),
+                font: { family: "'Inter', sans-serif", size: 11 },
+              },
+            },
+            y1: {
+              type: 'linear',
+              position: 'right',
+              min: 0,
+              grid: { drawOnChartArea: false },
+              ticks: {
+                color: chartTextColor(),
+                font: { family: "'Inter', sans-serif", size: 10 },
+              },
+              title: {
+                display: true,
+                text: 'Failed Count',
+                color: chartTextColor(),
+                font: { family: "'Inter', sans-serif", size: 11 },
+              },
+            },
+          },
+        },
+      });
+    }
+
+    /* ----------------------------------------------------------
+       Modules
+       ---------------------------------------------------------- */
+    async function renderModules(container) {
+      let data;
+      try {
+        data = await api('/api/modules');
+      } catch (err) {
+        container.innerHTML = emptyState('Error loading modules', err.message);
+        return;
+      }
+
+      if (!data || data.length === 0) {
+        container.innerHTML = emptyState('No module data', 'Run your tests and collect results to see module health.');
+        return;
+      }
+
+      // Sort controls
+      let html = `
+        <div class="section-title">Module Health</div>
+        <div class="section-subtitle">Average health over the last 10 runs</div>
+        <div class="filters">
+          <button class="page-btn ${modulesSortBy === 'health' ? 'active' : ''}" onclick="sortModules('health')">Sort by Health</button>
+          <button class="page-btn ${modulesSortBy === 'failures' ? 'active' : ''}" onclick="sortModules('failures')">Sort by Failures</button>
+          <button class="page-btn ${modulesSortBy === 'name' ? 'active' : ''}" onclick="sortModules('name')">Sort by Name</button>
+        </div>
+      `;
+
+      // Sort
+      const sorted = [...data].sort((a, b) => {
+        if (modulesSortBy === 'health') {
+          return modulesSortDir === 'asc' ? a.avg_health - b.avg_health : b.avg_health - a.avg_health;
+        }
+        if (modulesSortBy === 'failures') {
+          return modulesSortDir === 'desc' ? b.total_failures - a.total_failures : a.total_failures - b.total_failures;
+        }
+        if (modulesSortBy === 'name') {
+          return modulesSortDir === 'asc' ? a.module.localeCompare(b.module) : b.module.localeCompare(a.module);
+        }
+        return 0;
+      });
+
+      html += `<div class="module-list">`;
+      sorted.forEach((m, i) => {
+        html += `
+          <div class="module-row">
+            <div class="module-rank">#${i + 1}</div>
+            <div class="module-name">${esc(m.module)}</div>
+            <div class="module-bar">${healthBarHtml(m.avg_health)}</div>
+            <div class="module-meta">
+              <span>${m.total_failures} failures</span>
+              <span>${m.run_count} runs</span>
+              ${trendBadge(m.trend)}
+            </div>
+          </div>
+        `;
+      });
+      html += `</div>`;
+
+      container.innerHTML = html;
+    }
+
+    window.sortModules = function(by) {
+      if (modulesSortBy === by) {
+        modulesSortDir = modulesSortDir === 'asc' ? 'desc' : 'asc';
+      } else {
+        modulesSortBy = by;
+        modulesSortDir = by === 'name' ? 'asc' : 'desc';
+      }
+      loadTab('modules');
+    };
+
+    /* ----------------------------------------------------------
+       Tests
+       ---------------------------------------------------------- */
+    async function renderTests(container) {
+      const params = new URLSearchParams();
+      params.set('page', testsPage);
+      params.set('limit', '50');
+      if (testsStatus) params.set('status', testsStatus);
+      if (testsModule) params.set('module', testsModule);
+      if (testsSearch) params.set('search', testsSearch);
+
+      let data;
+      try {
+        data = await api(`/api/tests?${params.toString()}`);
+      } catch (err) {
+        container.innerHTML = emptyState('Error loading tests', err.message);
+        return;
+      }
+
+      if (!data.tests || (data.tests.length === 0 && !testsStatus && !testsModule && !testsSearch)) {
+        container.innerHTML = emptyState('No test results', 'Run your tests and collect results to see individual results here.');
+        return;
+      }
+
+      let html = `
+        <div class="section-title">Test Results</div>
+        <div class="section-subtitle">Run #${data.run_id || '—'} &middot; ${data.pagination.total} tests</div>
+        <div class="filters">
+          <input type="text" class="filter-input" placeholder="Search tests..." value="${esc(testsSearch)}" oninput="debounceTestSearch(this.value)" />
+          <select class="filter-select" onchange="filterTestStatus(this.value)">
+            <option value="">All Status</option>
+            <option value="passed" ${testsStatus === 'passed' ? 'selected' : ''}>Passed</option>
+            <option value="failed" ${testsStatus === 'failed' ? 'selected' : ''}>Failed</option>
+            <option value="skipped" ${testsStatus === 'skipped' ? 'selected' : ''}>Skipped</option>
+            <option value="flaky" ${testsStatus === 'flaky' ? 'selected' : ''}>Flaky</option>
+          </select>
+          <select class="filter-select" onchange="filterTestModule(this.value)">
+            <option value="">All Modules</option>
+            ${(data.modules || []).map(m => `<option value="${esc(m)}" ${testsModule === m ? 'selected' : ''}>${esc(m)}</option>`).join('')}
+          </select>
+        </div>
+      `;
+
+      if (data.tests.length === 0) {
+        html += emptyState('No matching tests', 'Try adjusting your filters.');
+      } else {
+        html += `<div class="table-wrapper"><table>
+          <thead>
+            <tr>
+              <th>Status</th>
+              <th>Module</th>
+              <th>Test</th>
+              <th>Duration</th>
+              <th>Root Cause</th>
+            </tr>
+          </thead>
+          <tbody>`;
+
+        for (const t of data.tests) {
+          const hasError = t.error_message && t.status === 'failed';
+          html += `
+            <tr>
+              <td>${statusBadge(t.status)}</td>
+              <td class="fw-600" style="font-size:12px">${esc(t.module)}</td>
+              <td>
+                <div style="font-weight:500">${esc(t.test_title)}</div>
+                <div style="font-size:11px;color:var(--text-tertiary)" class="td-truncate">${esc(t.file_path)}</div>
+                ${hasError ? `<div class="error-tooltip"><span style="font-size:11px;color:var(--fail);cursor:help" title="Hover to see error">View error</span><div class="error-tooltip-content">${esc(t.error_message)}</div></div>` : ''}
+              </td>
+              <td class="td-mono">${formatDuration(t.duration_ms)}</td>
+              <td>${t.root_cause ? `<span class="badge" style="background:${rootCauseColor(t.root_cause)}20;color:${rootCauseColor(t.root_cause)}">${esc(t.root_cause)}</span>` : '—'}</td>
+            </tr>
+          `;
+        }
+
+        html += `</tbody></table></div>`;
+
+        // Pagination
+        const pg = data.pagination;
+        if (pg.totalPages > 1) {
+          html += `
+            <div class="pagination">
+              <span>Page ${pg.page} of ${pg.totalPages} (${pg.total} tests)</span>
+              <div class="pagination-btns">
+                <button class="page-btn" ${pg.page <= 1 ? 'disabled' : ''} onclick="goTestsPage(${pg.page - 1})">&laquo; Prev</button>
+                ${renderPageNumbers(pg.page, pg.totalPages)}
+                <button class="page-btn" ${pg.page >= pg.totalPages ? 'disabled' : ''} onclick="goTestsPage(${pg.page + 1})">Next &raquo;</button>
+              </div>
+            </div>
+          `;
+        }
+      }
+
+      container.innerHTML = html;
+    }
+
+    function renderPageNumbers(current, total) {
+      if (total <= 7) {
+        return Array.from({ length: total }, (_, i) => i + 1)
+          .map(p => `<button class="page-btn ${p === current ? 'active' : ''}" onclick="goTestsPage(${p})">${p}</button>`)
+          .join('');
+      }
+
+      const pages = [];
+      pages.push(1);
+      if (current > 3) pages.push('...');
+      for (let p = Math.max(2, current - 1); p <= Math.min(total - 1, current + 1); p++) {
+        pages.push(p);
+      }
+      if (current < total - 2) pages.push('...');
+      pages.push(total);
+
+      return pages.map(p => {
+        if (p === '...') return `<span style="padding:4px 6px;color:var(--text-tertiary)">...</span>`;
+        return `<button class="page-btn ${p === current ? 'active' : ''}" onclick="goTestsPage(${p})">${p}</button>`;
+      }).join('');
+    }
+
+    let _testSearchTimer;
+    window.debounceTestSearch = function(val) {
+      clearTimeout(_testSearchTimer);
+      _testSearchTimer = setTimeout(() => {
+        testsSearch = val;
+        testsPage = 1;
+        loadTab('tests');
+      }, 300);
+    };
+
+    window.filterTestStatus = function(val) {
+      testsStatus = val;
+      testsPage = 1;
+      loadTab('tests');
+    };
+
+    window.filterTestModule = function(val) {
+      testsModule = val;
+      testsPage = 1;
+      loadTab('tests');
+    };
+
+    window.goTestsPage = function(page) {
+      testsPage = page;
+      loadTab('tests');
+    };
+
+    /* ----------------------------------------------------------
+       Regressions
+       ---------------------------------------------------------- */
+    async function renderRegressions(container) {
+      let data;
+      try {
+        data = await api('/api/regressions');
+      } catch (err) {
+        container.innerHTML = emptyState('Error loading regressions', err.message);
+        return;
+      }
+
+      if (!data.active || data.active.length === 0) {
+        container.innerHTML = `
+          <div class="section-title">Regressions</div>
+          ${emptyState('No active regressions', 'All previously passing tests are still passing. Great job!')}
+        `;
+        return;
+      }
+
+      let html = `
+        <div class="flex justify-between items-center mb-16">
+          <div>
+            <div class="section-title" style="margin-bottom:4px">Active Regressions</div>
+            <div class="section-subtitle" style="margin-bottom:0">${data.total} test${data.total !== 1 ? 's' : ''} that were passing but now fail</div>
+          </div>
+          <div class="card-value text-fail">${data.total}</div>
+        </div>
+      `;
+
+      // Per-module badges
+      if (data.per_module && data.per_module.length > 0) {
+        html += `<div class="flex gap-8 mb-16" style="flex-wrap:wrap">`;
+        for (const pm of data.per_module) {
+          html += `<span class="badge badge-fail" style="padding:4px 10px;font-size:12px">${esc(pm.module)}: ${pm.count}</span>`;
+        }
+        html += `</div>`;
+      }
+
+      // Regression list
+      for (const r of data.active) {
+        html += `
+          <div class="regression-item">
+            <div class="regression-header">
+              <div class="regression-title">${esc(r.test_title)}</div>
+              <span class="badge badge-fail">${esc(r.module)}</span>
+            </div>
+            <div class="regression-meta">
+              <span class="regression-commits">
+                <span class="commit-pass">${shortHash(r.pass_commit)}</span>
+                &rarr;
+                <span class="commit-fail">${shortHash(r.fail_commit)}</span>
+              </span>
+              <span>Signature: <code style="font-size:11px">${esc(r.test_signature ? r.test_signature.substring(0, 60) : '')}</code></span>
+            </div>
+          </div>
+        `;
+      }
+
+      container.innerHTML = html;
+    }
+
+    /* ----------------------------------------------------------
+       Root Causes
+       ---------------------------------------------------------- */
+    async function renderRootCauses(container) {
+      let data;
+      try {
+        data = await api('/api/root-causes');
+      } catch (err) {
+        container.innerHTML = emptyState('Error loading root causes', err.message);
+        return;
+      }
+
+      if (!data.breakdown || data.breakdown.length === 0) {
+        container.innerHTML = `
+          <div class="section-title">Root Cause Analysis</div>
+          ${emptyState('No failure data', 'Root cause analysis requires test failures to classify.')}
+        `;
+        return;
+      }
+
+      let html = `<div class="section-title">Root Cause Analysis</div>`;
+      html += `<div class="section-subtitle">Failure breakdown from the latest run</div>`;
+
+      // Doughnut + legend layout
+      html += `<div class="card mb-24"><div class="doughnut-layout">`;
+      html += `<div class="doughnut-container"><canvas id="rootcause-doughnut"></canvas></div>`;
+
+      // Legend
+      html += `<div><ul class="legend-list">`;
+      const total = data.breakdown.reduce((s, r) => s + r.count, 0);
+      for (const rc of data.breakdown) {
+        const pct = total > 0 ? ((rc.count / total) * 100).toFixed(1) : 0;
+        const color = rootCauseColor(rc.root_cause);
+        html += `
+          <li class="legend-item">
+            <span class="legend-swatch" style="background:${color}"></span>
+            <span class="legend-label">${esc(rc.root_cause || 'unknown')}</span>
+            <span class="legend-count">${rc.count}</span>
+            <span class="text-tertiary">(${pct}%)</span>
+          </li>
+        `;
+      }
+      html += `</ul></div>`;
+      html += `</div></div>`;
+
+      // Trend chart
+      if (data.trend && data.trend.length > 0) {
+        html += `
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Root Cause Trend (Last 10 Runs)</span>
+            </div>
+            <div class="chart-container" id="rootcause-trend-container">
+              <canvas id="rootcause-trend"></canvas>
+            </div>
+          </div>
+        `;
+      }
+
+      container.innerHTML = html;
+
+      // Render doughnut
+      renderDoughnutChart('rootcause-doughnut', data.breakdown);
+
+      // Render trend
+      if (data.trend && data.trend.length > 0) {
+        renderRootCauseTrendChart('rootcause-trend', data.trend);
+      }
+    }
+
+    function renderDoughnutChart(canvasId, breakdown) {
+      const canvas = document.getElementById(canvasId);
+      if (!canvas) return;
+
+      const labels = breakdown.map(r => r.root_cause || 'unknown');
+      const counts = breakdown.map(r => r.count);
+      const colors = labels.map(l => rootCauseColor(l));
+
+      charts.doughnut = new Chart(canvas, {
+        type: 'doughnut',
+        data: {
+          labels,
+          datasets: [{
+            data: counts,
+            backgroundColor: colors,
+            borderColor: getTheme() === 'dark' ? '#111' : '#fff',
+            borderWidth: 2,
+            hoverOffset: 6,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: '65%',
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: getTheme() === 'dark' ? '#222' : '#fff',
+              titleColor: getTheme() === 'dark' ? '#eee' : '#111',
+              bodyColor: getTheme() === 'dark' ? '#aaa' : '#555',
+              borderColor: getTheme() === 'dark' ? '#333' : '#eaeaea',
+              borderWidth: 1,
+              padding: 10,
+              cornerRadius: 6,
+              titleFont: { family: "'Inter', sans-serif", weight: '600', size: 12 },
+              bodyFont: { family: "'Inter', sans-serif", size: 11 },
+              callbacks: {
+                label: function(ctx) {
+                  const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                  const pct = total > 0 ? ((ctx.raw / total) * 100).toFixed(1) : 0;
+                  return ` ${ctx.label}: ${ctx.raw} (${pct}%)`;
+                },
+              },
+            },
+          },
+        },
+      });
+    }
+
+    function renderRootCauseTrendChart(canvasId, trendData) {
+      const canvas = document.getElementById(canvasId);
+      if (!canvas) return;
+
+      // Group by run_id, then pivot by root_cause
+      const runMap = new Map();
+      const causeSet = new Set();
+      for (const row of trendData) {
+        if (!runMap.has(row.run_id)) {
+          runMap.set(row.run_id, { created_at: row.created_at, causes: {} });
+        }
+        runMap.get(row.run_id).causes[row.root_cause || 'unknown'] = row.count;
+        causeSet.add(row.root_cause || 'unknown');
+      }
+
+      const runIds = Array.from(runMap.keys()).sort((a, b) => a - b);
+      const labels = runIds.map(id => formatDateShort(runMap.get(id).created_at));
+      const causes = Array.from(causeSet);
+
+      const datasets = causes.map(cause => ({
+        label: cause,
+        data: runIds.map(id => runMap.get(id).causes[cause] || 0),
+        backgroundColor: rootCauseColor(cause),
+        borderColor: rootCauseColor(cause),
+        borderWidth: 1,
+      }));
+
+      charts.rootCauseTrend = new Chart(canvas, {
+        type: 'bar',
+        data: { labels, datasets },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              display: true,
+              position: 'top',
+              labels: {
+                color: chartTextColor(),
+                font: { family: "'Inter', sans-serif", size: 11 },
+                usePointStyle: true,
+                pointStyle: 'rect',
+                padding: 16,
+              },
+            },
+            tooltip: {
+              backgroundColor: getTheme() === 'dark' ? '#222' : '#fff',
+              titleColor: getTheme() === 'dark' ? '#eee' : '#111',
+              bodyColor: getTheme() === 'dark' ? '#aaa' : '#555',
+              borderColor: getTheme() === 'dark' ? '#333' : '#eaeaea',
+              borderWidth: 1,
+              padding: 10,
+              cornerRadius: 6,
+            },
+          },
+          scales: {
+            x: {
+              stacked: true,
+              grid: { color: chartGridColor() },
+              ticks: { color: chartTextColor(), font: { family: "'Inter', sans-serif", size: 10 } },
+            },
+            y: {
+              stacked: true,
+              grid: { color: chartGridColor() },
+              ticks: { color: chartTextColor(), font: { family: "'Inter', sans-serif", size: 10 } },
+              title: {
+                display: true,
+                text: 'Failure Count',
+                color: chartTextColor(),
+                font: { family: "'Inter', sans-serif", size: 11 },
+              },
+            },
+          },
+        },
+      });
+    }
+
+    /* ----------------------------------------------------------
+       MTTR
+       ---------------------------------------------------------- */
+    async function renderMttr(container) {
+      let data;
+      try {
+        data = await api('/api/mttr');
+      } catch (err) {
+        container.innerHTML = emptyState('Error loading MTTR data', err.message);
+        return;
+      }
+
+      const hasData = (data.active && data.active.length > 0) || (data.resolved && data.resolved.length > 0);
+
+      if (!hasData) {
+        container.innerHTML = `
+          <div class="section-title">Mean Time to Resolution</div>
+          ${emptyState('No failure tracking data', 'MTTR tracking requires multiple runs with failures.')}
+        `;
+        return;
+      }
+
+      let html = `<div class="section-title">Mean Time to Resolution</div>`;
+
+      // Summary stats
+      html += `<div class="grid grid-3 mb-24">`;
+      html += `
+        <div class="card stat-card">
+          <div class="card-title">Active Failures</div>
+          <div class="card-value text-fail">${data.active ? data.active.length : 0}</div>
+          <div class="card-subtitle">currently tracked</div>
+        </div>
+      `;
+      html += `
+        <div class="card stat-card">
+          <div class="card-title">Resolved</div>
+          <div class="card-value text-success">${data.resolved ? data.resolved.length : 0}</div>
+          <div class="card-subtitle">recently fixed</div>
+        </div>
+      `;
+      html += `
+        <div class="card stat-card">
+          <div class="card-title">Average MTTR</div>
+          <div class="card-value">${data.avg_mttr_hours != null ? formatHours(data.avg_mttr_hours) : '—'}</div>
+          <div class="card-subtitle">time to fix</div>
+        </div>
+      `;
+      html += `</div>`;
+
+      // Active failures (stale ones)
+      if (data.active && data.active.length > 0) {
+        html += `<div class="section-title" style="font-size:14px">Active Failures (${data.active.length})</div>`;
+        html += `<div class="section-subtitle">Tests that are still failing — oldest first</div>`;
+
+        for (const f of data.active) {
+          const age = f.first_seen_at ? timeSince(f.first_seen_at) : '—';
+          html += `
+            <div class="mttr-item">
+              <div class="mttr-info">
+                <div class="mttr-title">${esc(f.test_title)}</div>
+                <div class="mttr-meta">
+                  <span class="badge badge-fail" style="margin-right:6px">${esc(f.module)}</span>
+                  First seen: ${formatDate(f.first_seen_at)} &middot; Occurrences: ${f.occurrences}
+                </div>
+              </div>
+              <div class="mttr-duration text-fail">${age} ago</div>
+            </div>
+          `;
+        }
+      }
+
+      // Resolved failures
+      if (data.resolved && data.resolved.length > 0) {
+        html += `<div class="section-spacer">`;
+        html += `<div class="section-title" style="font-size:14px">Recently Resolved (${data.resolved.length})</div>`;
+        html += `<div class="section-subtitle">Tests that were fixed — newest first</div>`;
+
+        html += `<div class="table-wrapper"><table>
+          <thead>
+            <tr>
+              <th>Test</th>
+              <th>Module</th>
+              <th>Time to Fix</th>
+              <th>Occurrences</th>
+              <th>Resolved At</th>
+            </tr>
+          </thead>
+          <tbody>`;
+
+        for (const f of data.resolved) {
+          const hours = f.hours_to_fix;
+          html += `
+            <tr>
+              <td class="fw-600">${esc(f.test_title)}</td>
+              <td><span class="badge badge-pass">${esc(f.module)}</span></td>
+              <td class="fw-600">${hours != null ? formatHours(hours) : '—'}</td>
+              <td>${f.occurrences}</td>
+              <td class="text-secondary">${formatDate(f.resolved_at)}</td>
+            </tr>
+          `;
+        }
+
+        html += `</tbody></table></div></div>`;
+      }
+
+      container.innerHTML = html;
+    }
+
+    function timeSince(dateStr) {
+      const then = new Date(dateStr);
+      const now = new Date();
+      const diffMs = now - then;
+      if (diffMs < 0) return '—';
+      const hours = diffMs / 3600000;
+      if (hours < 1) return `${Math.round(hours * 60)}m`;
+      if (hours < 24) return `${hours.toFixed(1)}h`;
+      const days = hours / 24;
+      if (days < 7) return `${days.toFixed(1)}d`;
+      return `${Math.round(days / 7)}w`;
+    }
+
+    /* ----------------------------------------------------------
+       Flaky
+       ---------------------------------------------------------- */
+    async function renderFlaky(container) {
+      let data;
+      try {
+        data = await api('/api/flaky');
+      } catch (err) {
+        container.innerHTML = emptyState('Error loading flaky data', err.message);
+        return;
+      }
+
+      if (!data || data.length === 0) {
+        container.innerHTML = `
+          <div class="section-title">Flaky Tests</div>
+          ${emptyState('No flaky tests', 'No tests have shown intermittent failures across recent runs.')}
+        `;
+        return;
+      }
+
+      let html = `
+        <div class="flex justify-between items-center mb-16">
+          <div>
+            <div class="section-title" style="margin-bottom:4px">Flaky Test Leaderboard</div>
+            <div class="section-subtitle" style="margin-bottom:0">${data.length} flaky test${data.length !== 1 ? 's' : ''} across the last 20 runs</div>
+          </div>
+        </div>
+      `;
+
+      for (const f of data) {
+        html += `
+          <div class="flaky-item">
+            <div class="flaky-count">${f.flaky_count}</div>
+            <div class="flaky-info">
+              <div class="flaky-title">${esc(f.test_title)}</div>
+              <div class="flaky-meta">
+                <span class="badge badge-warn">${esc(f.module)}</span>
+                &middot; Last seen: ${formatDate(f.last_seen)}
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
+      container.innerHTML = html;
+    }
+
+    /* ==============================================================
+       Tab switching & loading
+       ============================================================== */
+    const TAB_RENDERERS = {
+      'overview': renderOverview,
+      'modules': renderModules,
+      'tests': renderTests,
+      'regressions': renderRegressions,
+      'root-causes': renderRootCauses,
+      'mttr': renderMttr,
+      'flaky': renderFlaky,
+    };
+
+    function switchTab(tab) {
+      currentTab = tab;
+      // Reset test filters when switching tabs
+      if (tab !== 'tests') {
+        testsPage = 1;
+        testsStatus = '';
+        testsModule = '';
+        testsSearch = '';
+      }
+      // Update tab buttons
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tab === tab);
+      });
+      loadTab(tab);
+    }
+
+    async function loadTab(tab) {
+      const app = document.getElementById('app');
+      destroyCharts();
+
+      const renderer = TAB_RENDERERS[tab];
+      if (!renderer) {
+        app.innerHTML = emptyState('Unknown tab', 'This tab does not exist.');
+        return;
+      }
+
+      // Show loading only if container is empty or switching
+      if (app.innerHTML.includes('loading') || !app.innerHTML.trim()) {
+        app.innerHTML = loadingHtml();
+      }
+
+      await renderer(app);
+      lastRefresh = new Date();
+      updateRefreshIndicator();
+    }
+
+    function updateRefreshIndicator() {
+      const el = document.getElementById('refresh-indicator');
+      if (!el || !lastRefresh) return;
+      const secs = Math.round((Date.now() - lastRefresh.getTime()) / 1000);
+      if (secs < 5) {
+        el.textContent = 'Updated just now';
+      } else if (secs < 60) {
+        el.textContent = `Updated ${secs}s ago`;
+      } else {
+        el.textContent = `Updated ${Math.round(secs / 60)}m ago`;
+      }
+    }
+
+    /* ==============================================================
+       Init
+       ============================================================== */
+    function init() {
+      // Set theme
+      const theme = getTheme();
+      document.documentElement.setAttribute('data-theme', theme);
+      const sun = document.getElementById('theme-icon-sun');
+      const moon = document.getElementById('theme-icon-moon');
+      if (sun && moon) {
+        sun.style.display = theme === 'dark' ? 'none' : 'block';
+        moon.style.display = theme === 'dark' ? 'block' : 'none';
+      }
+
+      // Theme toggle
+      document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
+
+      // Render tabs
+      const tabsNav = document.getElementById('tabs');
+      tabsNav.innerHTML = TAB_CONFIG.map(t =>
+        `<button class="tab-btn ${t.id === currentTab ? 'active' : ''}" data-tab="${t.id}" onclick="switchTab('${t.id}')">${t.label}</button>`
+      ).join('');
+
+      // Load initial tab
+      loadTab(currentTab);
+
+      // Auto-refresh
+      refreshTimer = setInterval(() => {
+        loadTab(currentTab);
+      }, REFRESH_INTERVAL);
+
+      // Refresh indicator timer
+      setInterval(updateRefreshIndicator, 5000);
+
+      // Hash-based routing
+      function handleHash() {
+        const hash = window.location.hash.replace('#', '');
+        if (hash && TAB_RENDERERS[hash]) {
+          switchTab(hash);
+        }
+      }
+      window.addEventListener('hashchange', handleHash);
+      if (window.location.hash) {
+        handleHash();
+      }
+    }
+
+    // Make switchTab globally accessible
+    window.switchTab = function(tab) {
+      window.location.hash = tab;
+      currentTab = tab;
+      if (tab !== 'tests') {
+        testsPage = 1;
+        testsStatus = '';
+        testsModule = '';
+        testsSearch = '';
+      }
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tab === tab);
+      });
+      loadTab(tab);
+    };
+
+    // Start
+    document.addEventListener('DOMContentLoaded', init);
+  </script>
+</body>
+</html>

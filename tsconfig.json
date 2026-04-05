@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.base.json",
+  "references": [
+    { "path": "packages/core" },
+    { "path": "packages/collector" },
+    { "path": "packages/analyzer" },
+    { "path": "packages/discovery" },
+    { "path": "packages/generator" },
+    { "path": "packages/api" },
+    { "path": "packages/dashboard" },
+    { "path": "packages/cli" }
+  ]
+}
